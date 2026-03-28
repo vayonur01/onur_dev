@@ -7,383 +7,241 @@ local LocalPlayer = Players.LocalPlayer
 -- VARIABLES
 local flySpeed = 1
 local walkSpeed = 16
-local jumpValue = 7
-local flying = false
-local noclip = false
-local espEnabled = false
-local shiftlock = false
-local shiftConn
+local jumpValue = 50
+local flying, noclip = false, false
+local individualESP = {} 
 
--- GUI
+-- GUI HELPER
 local ScreenGui = Instance.new("ScreenGui", game.CoreGui)
-
 local function round(o, r)
 	local c = Instance.new("UICorner", o)
 	c.CornerRadius = UDim.new(0, r or 10)
 end
 
 ------------------------------------------------
--- MAIN
+-- MAIN FRAME
 ------------------------------------------------
 local Main = Instance.new("Frame", ScreenGui)
-Main.Size = UDim2.new(0,320,0,650)
-Main.Position = UDim2.new(0.5,-160,0.5,-325)
-Main.BackgroundColor3 = Color3.fromRGB(25,25,25)
+Main.Size = UDim2.new(0, 480, 0, 450)
+Main.Position = UDim2.new(0.5, -240, 0.5, -225)
+Main.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
 round(Main)
 
 local strokeMain = Instance.new("UIStroke", Main)
 strokeMain.Thickness = 2
-
 task.spawn(function()
 	while true do
 		RunService.RenderStepped:Wait()
-		strokeMain.Color = Color3.fromHSV(tick()%5/5,1,1)
+		strokeMain.Color = Color3.fromHSV(tick()%5/5, 1, 1)
 	end
 end)
 
-------------------------------------------------
--- HEADER DRAG
-------------------------------------------------
 local Header = Instance.new("TextLabel", Main)
-Header.Size = UDim2.new(1,0,0,40)
-Header.Text = "Instagram: emreonrwp"
-Header.BackgroundColor3 = Color3.fromRGB(30,30,30)
-Header.TextColor3 = Color3.new(1,1,1)
+Header.Size = UDim2.new(1, 0, 0, 35)
+Header.Text = "Premium Hub | emreonrwp"
+Header.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+Header.TextColor3 = Color3.new(1, 1, 1)
 Header.Active = true
 round(Header)
 
-local dragging = false
-local dragStart, startPos
+local Sidebar = Instance.new("Frame", Main)
+Sidebar.Size = UDim2.new(0, 120, 1, -140)
+Sidebar.Position = UDim2.new(0, 10, 0, 45)
+Sidebar.BackgroundTransparency = 1
+Instance.new("UIListLayout", Sidebar).Padding = UDim.new(0, 5)
 
-Header.InputBegan:Connect(function(input)
-	if input.UserInputType == Enum.UserInputType.MouseButton1 then
-		dragging = true
-		dragStart = input.Position
-		startPos = Main.Position
-	end
-end)
-
-UIS.InputEnded:Connect(function(input)
-	if input.UserInputType == Enum.UserInputType.MouseButton1 then
-		dragging = false
-	end
-end)
-
-UIS.InputChanged:Connect(function(input)
-	if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
-		local delta = input.Position - dragStart
-		Main.Position = UDim2.new(
-			startPos.X.Scale,
-			startPos.X.Offset + delta.X,
-			startPos.Y.Scale,
-			startPos.Y.Offset + delta.Y
-		)
-	end
-end)
+local Container = Instance.new("Frame", Main)
+Container.Size = UDim2.new(1, -150, 1, -55)
+Container.Position = UDim2.new(0, 140, 0, 45)
+Container.BackgroundTransparency = 1
 
 ------------------------------------------------
--- FLOAT BUTTON
+-- DRAG LOGIC (FIXED)
 ------------------------------------------------
-local ToggleBtn = Instance.new("TextButton", ScreenGui)
-ToggleBtn.Size = UDim2.new(0,60,0,60)
-ToggleBtn.Position = UDim2.new(0,20,0.5,-30)
-ToggleBtn.Text = "≡"
-ToggleBtn.TextScaled = true
-ToggleBtn.BackgroundColor3 = Color3.fromRGB(30,30,30)
-ToggleBtn.TextColor3 = Color3.new(1,1,1)
-ToggleBtn.Draggable = true
-round(ToggleBtn,100)
-
-ToggleBtn.MouseButton1Click:Connect(function()
-	Main.Visible = not Main.Visible
-end)
+local function makeDraggable(obj, target)
+	target = target or obj
+	local dragging, dragStart, startPos
+	obj.InputBegan:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1 then
+			dragging = true
+			dragStart = input.Position
+			startPos = target.Position
+			input.Changed:Connect(function()
+				if input.UserInputState == Enum.UserInputState.End then dragging = false end
+			end)
+		end
+	end)
+	UIS.InputChanged:Connect(function(input)
+		if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
+			local delta = input.Position - dragStart
+			target.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+		end
+	end)
+end
 
 ------------------------------------------------
--- SLIDER
+-- TABS & SEARCH
 ------------------------------------------------
-local function createSlider(yPos, text, default, callback)
-	local label = Instance.new("TextLabel", Main)
-	label.Position = UDim2.new(0.05,0,yPos,0)
-	label.Size = UDim2.new(0.9,0,0,25)
-	label.Text = text..": "..default
-	label.TextColor3 = Color3.new(1,1,1)
-	label.BackgroundTransparency = 1
+local Tabs = {}
+local function createTab(name)
+	local page = Instance.new("Frame", Container)
+	page.Size = UDim2.new(1, 0, 1, 0)
+	page.BackgroundTransparency = 1
+	page.Visible = false
+	local btn = Instance.new("TextButton", Sidebar)
+	btn.Size = UDim2.new(1, 0, 0, 35); btn.Text = name; btn.BackgroundColor3 = Color3.fromRGB(35, 35, 35); btn.TextColor3 = Color3.new(1, 1, 1); round(btn, 6)
+	btn.MouseButton1Click:Connect(function() for _, p in pairs(Tabs) do p.Visible = false end page.Visible = true end)
+	Tabs[name] = page; return page
+end
 
-	local slider = Instance.new("Frame", Main)
-	slider.Size = UDim2.new(0.9,0,0,6)
-	slider.Position = UDim2.new(0.05,0,yPos+0.06,0)
-	slider.BackgroundColor3 = Color3.fromRGB(60,60,60)
-	round(slider,10)
+local charTabRaw = createTab("Karakter")
+local charTab = Instance.new("ScrollingFrame", charTabRaw)
+charTab.Size = UDim2.new(1,0,1,0); charTab.BackgroundTransparency = 1; charTab.ScrollBarThickness = 2
+Instance.new("UIListLayout", charTab).Padding = UDim.new(0, 10)
 
-	local knob = Instance.new("Frame", slider)
-	knob.Size = UDim2.new(0,16,0,16)
-	knob.Position = UDim2.new(0,0,-0.5,0)
-	knob.BackgroundColor3 = Color3.new(1,1,1)
-	round(knob,100)
+local playerTabRaw = createTab("Oyuncular")
+charTabRaw.Visible = true
+
+local SearchBox = Instance.new("TextBox", playerTabRaw)
+SearchBox.Size = UDim2.new(0.95, 0, 0, 30); SearchBox.PlaceholderText = "Oyuncu Ara..."; SearchBox.Text = ""; SearchBox.BackgroundColor3 = Color3.fromRGB(35, 35, 35); SearchBox.TextColor3 = Color3.new(1, 1, 1); round(SearchBox, 6)
+
+local playerListScroll = Instance.new("ScrollingFrame", playerTabRaw)
+playerListScroll.Size = UDim2.new(1, 0, 1, -40); playerListScroll.Position = UDim2.new(0, 0, 0, 40); playerListScroll.BackgroundTransparency = 1; playerListScroll.ScrollBarThickness = 2
+local plLayout = Instance.new("UIListLayout", playerListScroll); plLayout.Padding = UDim.new(0, 8)
+
+------------------------------------------------
+-- SLIDER LOGIC (100% FIXED)
+------------------------------------------------
+local function createSlider(parent, text, default, min, max, callback)
+	local holder = Instance.new("Frame", parent)
+	holder.Size = UDim2.new(0.95, 0, 0, 50); holder.BackgroundTransparency = 1
+	
+	local lbl = Instance.new("TextLabel", holder)
+	lbl.Text = text..": "..default; lbl.Size = UDim2.new(1,0,0,20); lbl.TextColor3 = Color3.new(1,1,1); lbl.BackgroundTransparency = 1
+	
+	local sld = Instance.new("Frame", holder)
+	sld.Size = UDim2.new(1,0,0,6); sld.Position = UDim2.new(0,0,0,30); sld.BackgroundColor3 = Color3.fromRGB(60,60,60); round(sld)
+	
+	local knb = Instance.new("TextButton", sld)
+	knb.Size = UDim2.new(0,16,0,16); knb.Text = ""; knb.BackgroundColor3 = Color3.new(1,1,1); round(knb, 100)
+	
+	local initialRel = math.clamp((default - min) / (max - min), 0, 1)
+	knb.Position = UDim2.new(initialRel, -8, 0.5, -8)
 
 	local dragging = false
 
-	local function update(input)
-		local rel = math.clamp((input.Position.X - slider.AbsolutePosition.X) / slider.AbsoluteSize.X, 0, 1)
-		knob.Position = UDim2.new(rel,-8,-0.5,0)
-		local val = math.floor(1 + rel*99)
-		label.Text = text..": "..val
+	local function move()
+		local mousePos = UIS:GetMouseLocation().X
+		local relativeX = math.clamp((mousePos - sld.AbsolutePosition.X) / sld.AbsoluteSize.X, 0, 1)
+		knb.Position = UDim2.new(relativeX, -8, 0.5, -8)
+		local val = math.floor(min + (relativeX * (max - min)))
+		lbl.Text = text..": "..val
 		callback(val)
 	end
 
-	knob.InputBegan:Connect(function(input)
-		if input.UserInputType == Enum.UserInputType.MouseButton1 then
-			dragging = true
-		end
+	knb.InputBegan:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1 then dragging = true end
 	end)
-
+	
 	UIS.InputEnded:Connect(function(input)
-		if input.UserInputType == Enum.UserInputType.MouseButton1 then
-			dragging = false
-		end
+		if input.UserInputType == Enum.UserInputType.MouseButton1 then dragging = false end
 	end)
 
 	UIS.InputChanged:Connect(function(input)
-		if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
-			update(input)
-		end
+		if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then move() end
 	end)
 end
 
-createSlider(0.12,"WalkSpeed",16,function(v)
-	walkSpeed=v
-	local hum=LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid")
-	if hum then hum.WalkSpeed=v end
-end)
-
-createSlider(0.25,"FlySpeed",1,function(v)
-	flySpeed=v
-end)
-
-createSlider(0.33,"Jump",7,function(v)
-	jumpValue=v
-	local hum=LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid")
-	if hum then
-		if hum.UseJumpPower then
-			hum.JumpPower=v
-		else
-			hum.JumpHeight=v/2
-		end
-	end
-end)
-
 ------------------------------------------------
--- SHIFTLOCK
+-- CHARACTER FEATURES
 ------------------------------------------------
-local function enableShiftLock()
-	local char = LocalPlayer.Character
-	if not char then return end
+createSlider(charTab, "WalkSpeed", 16, 16, 250, function(v)
+	if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid") then LocalPlayer.Character.Humanoid.WalkSpeed = v end
+end)
 
-	local hum = char:FindFirstChild("Humanoid")
-	local root = char:FindFirstChild("HumanoidRootPart")
+createSlider(charTab, "JumpPower", 50, 0, 500, function(v)
+	local hum = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid")
+	if hum then if hum.UseJumpPower then hum.JumpPower = v else hum.JumpHeight = v/2 end end
+end)
 
-	UIS.MouseBehavior = Enum.MouseBehavior.LockCenter
-	hum.AutoRotate = false
-
-	shiftConn = RunService.RenderStepped:Connect(function()
-		local cam = workspace.CurrentCamera
-		local look = cam.CFrame.LookVector
-		root.CFrame = CFrame.new(root.Position, root.Position + Vector3.new(look.X,0,look.Z))
-	end)
+local function createToggle(parent, text, cb)
+	local b = Instance.new("TextButton", parent); b.Size = UDim2.new(0.95, 0, 0, 35); b.Text = text; b.BackgroundColor3 = Color3.fromRGB(40,40,40); b.TextColor3 = Color3.new(1,1,1); round(b, 6)
+	b.MouseButton1Click:Connect(function() cb(b) end)
 end
 
-local function disableShiftLock()
-	local char = LocalPlayer.Character
-	if not char then return end
-
-	local hum = char:FindFirstChild("Humanoid")
-	UIS.MouseBehavior = Enum.MouseBehavior.Default
-	if hum then hum.AutoRotate = true end
-
-	if shiftConn then shiftConn:Disconnect() end
-end
-
-local ShiftBtn = Instance.new("TextButton",Main)
-ShiftBtn.Size=UDim2.new(0.9,0,0,35)
-ShiftBtn.Position=UDim2.new(0.05,0,0.41,0)
-ShiftBtn.Text="ShiftLock: Kapalı"
-round(ShiftBtn)
-
-local function updateShift()
-	ShiftBtn.Text = "ShiftLock: "..(shiftlock and "Açık" or "Kapalı")
-end
-
-ShiftBtn.MouseButton1Click:Connect(function()
-	shiftlock = not shiftlock
-	if shiftlock then enableShiftLock() else disableShiftLock() end
-	updateShift()
-end)
-
-UIS.InputBegan:Connect(function(input,g)
-	if g then return end
-	if input.KeyCode == Enum.KeyCode.LeftShift then
-		shiftlock = not shiftlock
-		if shiftlock then enableShiftLock() else disableShiftLock() end
-		updateShift()
-	end
-end)
-
-------------------------------------------------
--- FLY
-------------------------------------------------
-local bv,bg,flyConn
-
-local function stopFly()
-	local char = LocalPlayer.Character
-	local hum = char and char:FindFirstChild("Humanoid")
-
-	if flyConn then flyConn:Disconnect() end
-	if bv then bv:Destroy() end
-	if bg then bg:Destroy() end
-
-	if hum then
-		hum.PlatformStand = false
-		hum.WalkSpeed = walkSpeed
-
-		if hum.UseJumpPower then
-			hum.JumpPower = jumpValue
-		else
-			hum.JumpHeight = jumpValue/2
-		end
-	end
-end
-
-local function startFly()
-	local char = LocalPlayer.Character
-	local root = char and char:FindFirstChild("HumanoidRootPart")
-	local hum = char and char:FindFirstChild("Humanoid")
-
-	hum.PlatformStand = true
-	hum.WalkSpeed = 0
-
-	if hum.UseJumpPower then
-		hum.JumpPower = 0
+local bv, bg, flyConn
+createToggle(charTab, "Fly: Kapalı", function(b)
+	flying = not flying; b.Text = flying and "Fly: Açık" or "Fly: Kapalı"
+	if flying then
+		local char = LocalPlayer.Character; local root = char.HumanoidRootPart; char.Humanoid.PlatformStand = true
+		bv = Instance.new("BodyVelocity", root); bv.MaxForce = Vector3.new(1e6,1e6,1e6)
+		bg = Instance.new("BodyGyro", root); bg.MaxTorque = Vector3.new(1e6,1e6,1e6)
+		flyConn = RunService.RenderStepped:Connect(function()
+			local cam = workspace.CurrentCamera; local dir = Vector3.zero
+			if UIS:IsKeyDown(Enum.KeyCode.W) then dir += cam.CFrame.LookVector end
+			if UIS:IsKeyDown(Enum.KeyCode.S) then dir -= cam.CFrame.LookVector end
+			if UIS:IsKeyDown(Enum.KeyCode.A) then dir -= cam.CFrame.RightVector end
+			if UIS:IsKeyDown(Enum.KeyCode.D) then dir += cam.CFrame.RightVector end
+			bv.Velocity = dir.Magnitude > 0 and dir.Unit * (flySpeed * 60) or Vector3.zero; bg.CFrame = cam.CFrame
+		end)
 	else
-		hum.JumpHeight = 0
+		if flyConn then flyConn:Disconnect() end; if bv then bv:Destroy() end; if bg then bg:Destroy() end
+		if LocalPlayer.Character then LocalPlayer.Character.Humanoid.PlatformStand = false end
 	end
-
-	bv = Instance.new("BodyVelocity", root)
-	bv.MaxForce = Vector3.new(1e6,1e6,1e6)
-
-	bg = Instance.new("BodyGyro", root)
-	bg.MaxTorque = Vector3.new(1e6,1e6,1e6)
-
-	flyConn = RunService.RenderStepped:Connect(function()
-		local cam = workspace.CurrentCamera
-		local dir = Vector3.zero
-
-		if UIS:IsKeyDown(Enum.KeyCode.W) then dir += cam.CFrame.LookVector end
-		if UIS:IsKeyDown(Enum.KeyCode.S) then dir -= cam.CFrame.LookVector end
-		if UIS:IsKeyDown(Enum.KeyCode.A) then dir -= cam.CFrame.RightVector end
-		if UIS:IsKeyDown(Enum.KeyCode.D) then dir += cam.CFrame.RightVector end
-		if UIS:IsKeyDown(Enum.KeyCode.Space) then dir += Vector3.new(0,1,0) end
-		if UIS:IsKeyDown(Enum.KeyCode.LeftControl) then dir -= Vector3.new(0,1,0) end
-
-		bv.Velocity = dir.Magnitude>0 and dir.Unit*(flySpeed*60) or Vector3.zero
-		bg.CFrame = cam.CFrame
-	end)
-end
-
-local FlyBtn = Instance.new("TextButton",Main)
-FlyBtn.Size=UDim2.new(0.9,0,0,35)
-FlyBtn.Position=UDim2.new(0.05,0,0.47,0)
-FlyBtn.Text="Fly"
-round(FlyBtn)
-
-FlyBtn.MouseButton1Click:Connect(function()
-	flying=not flying
-	if flying then startFly() else stopFly() end
 end)
 
+createToggle(charTab, "Noclip: Kapalı", function(b) noclip = not noclip; b.Text = noclip and "Noclip: Açık" or "Noclip: Kapalı" end)
+
 ------------------------------------------------
--- NOCLIP
+-- PLAYER LIST & INDIVIDUAL ESP
 ------------------------------------------------
+local function updatePlayerList()
+	for _, v in pairs(playerListScroll:GetChildren()) do if v:IsA("Frame") then v:Destroy() end end
+	local searchText = SearchBox.Text:lower()
+	for _, p in pairs(Players:GetPlayers()) do
+		if p ~= LocalPlayer and (p.DisplayName:lower():find(searchText) or p.Name:lower():find(searchText)) then
+			local row = Instance.new("Frame", playerListScroll); row.Size = UDim2.new(0.95, 0, 0, 50); row.BackgroundColor3 = Color3.fromRGB(30, 30, 30); round(row, 6)
+			local img = Instance.new("ImageLabel", row); img.Size = UDim2.new(0, 40, 0, 40); img.Position = UDim2.new(0, 5, 0.5, -20); img.BackgroundTransparency = 1; round(img, 100)
+			pcall(function() img.Image = Players:GetUserThumbnailAsync(p.UserId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size420x420) end)
+			local nameBtn = Instance.new("TextButton", row); nameBtn.Size = UDim2.new(0.4, 0, 1, 0); nameBtn.Position = UDim2.new(0, 50, 0, 0); nameBtn.Text = p.DisplayName; nameBtn.TextColor3 = Color3.new(1,1,1); nameBtn.BackgroundTransparency = 1; nameBtn.TextXAlignment = Enum.TextXAlignment.Left; nameBtn.Font = Enum.Font.SourceSansBold
+			nameBtn.MouseButton1Click:Connect(function() if p.Character then LocalPlayer.Character.HumanoidRootPart.CFrame = p.Character.HumanoidRootPart.CFrame end end)
+			local espBtn = Instance.new("TextButton", row); espBtn.Size = UDim2.new(0, 80, 0, 25); espBtn.Position = UDim2.new(1, -90, 0.5, -12); espBtn.Text = individualESP[p] and "ESP: ON" or "ESP: OFF"; espBtn.BackgroundColor3 = individualESP[p] and Color3.fromRGB(40, 150, 40) or Color3.fromRGB(150, 40, 40); espBtn.TextColor3 = Color3.new(1, 1, 1); round(espBtn, 15)
+			espBtn.MouseButton1Click:Connect(function()
+				if individualESP[p] then
+					individualESP[p]:Destroy(); individualESP[p] = nil; espBtn.BackgroundColor3 = Color3.fromRGB(150, 40, 40); espBtn.Text = "ESP: OFF"
+				else
+					if p.Character then
+						local h = Instance.new("Highlight", p.Character); h.FillTransparency = 0.5; individualESP[p] = h; espBtn.BackgroundColor3 = Color3.fromRGB(40, 150, 40); espBtn.Text = "ESP: ON"
+					end
+				end
+			end)
+		end
+	end
+	playerListScroll.CanvasSize = UDim2.new(0, 0, 0, plLayout.AbsoluteContentSize.Y + 20)
+end
+SearchBox:GetPropertyChangedSignal("Text"):Connect(updatePlayerList)
+Players.PlayerAdded:Connect(updatePlayerList); Players.PlayerRemoving:Connect(updatePlayerList); updatePlayerList()
+
+------------------------------------------------
+-- BOTTOM BUTTONS & TOGGLE
+------------------------------------------------
+local function createQuickBtn(text, pos, color, cb)
+	local b = Instance.new("TextButton", Main); b.Size = UDim2.new(0, 120, 0, 35); b.Position = pos; b.Text = text; b.BackgroundColor3 = color; b.TextColor3 = Color3.new(1, 1, 1); round(b, 6); b.MouseButton1Click:Connect(cb)
+end
+createQuickBtn("Menüyü Gizle", UDim2.new(0, 10, 1, -85), Color3.fromRGB(40, 40, 40), function() Main.Visible = false end)
+createQuickBtn("Çıkış", UDim2.new(0, 10, 1, -45), Color3.fromRGB(120, 40, 40), function() ScreenGui:Destroy() end)
+
+local ToggleIcon = Instance.new("TextButton", ScreenGui); ToggleIcon.Size = UDim2.new(0, 60, 0, 60); ToggleIcon.Position = UDim2.new(0, 20, 0.5, -30); ToggleIcon.Text = "≡"; ToggleIcon.BackgroundColor3 = Color3.fromRGB(30, 30, 30); ToggleIcon.TextColor3 = Color3.new(1, 1, 1); ToggleIcon.TextScaled = true; round(ToggleIcon, 100)
+ToggleIcon.MouseButton1Click:Connect(function() Main.Visible = not Main.Visible end)
+
+makeDraggable(Header, Main); makeDraggable(ToggleIcon)
+
 RunService.Stepped:Connect(function()
 	if noclip and LocalPlayer.Character then
-		for _,v in pairs(LocalPlayer.Character:GetDescendants()) do
-			if v:IsA("BasePart") then v.CanCollide=false end
-		end
+		for _, v in pairs(LocalPlayer.Character:GetDescendants()) do if v:IsA("BasePart") then v.CanCollide = false end end
 	end
 end)
-
-local NoclipBtn = Instance.new("TextButton",Main)
-NoclipBtn.Size=UDim2.new(0.9,0,0,35)
-NoclipBtn.Position=UDim2.new(0.05,0,0.55,0)
-NoclipBtn.Text="Noclip"
-round(NoclipBtn)
-
-NoclipBtn.MouseButton1Click:Connect(function()
-	noclip=not noclip
-end)
-
-------------------------------------------------
--- ESP
-------------------------------------------------
-local espObjects = {}
-
-local function createESP(p)
-	if p==LocalPlayer then return end
-	if p.Character then
-		local h=Instance.new("Highlight",p.Character)
-		h.FillTransparency=1
-		espObjects[p]=h
-	end
-end
-
-local function enableESP()
-	for _,p in pairs(Players:GetPlayers()) do createESP(p) end
-end
-
-local function disableESP()
-	for _,v in pairs(espObjects) do v:Destroy() end
-	espObjects={}
-end
-
-task.spawn(function()
-	while true do
-		RunService.RenderStepped:Wait()
-		if espEnabled then
-			local c=Color3.fromHSV(tick()%5/5,1,1)
-			for _,v in pairs(espObjects) do v.OutlineColor=c end
-		end
-	end
-end)
-
-local ESPBtn = Instance.new("TextButton",Main)
-ESPBtn.Size=UDim2.new(0.9,0,0,35)
-ESPBtn.Position=UDim2.new(0.05,0,0.63,0)
-ESPBtn.Text="ESP"
-round(ESPBtn)
-
-ESPBtn.MouseButton1Click:Connect(function()
-	espEnabled=not espEnabled
-	if espEnabled then enableESP() else disableESP() end
-end)
-
-------------------------------------------------
--- HIDE + EXIT
-------------------------------------------------
-local HideBtn = Instance.new("TextButton",Main)
-HideBtn.Size=UDim2.new(0.9,0,0,35)
-HideBtn.Position=UDim2.new(0.05,0,0.85,0)
-HideBtn.Text="Menüyü Gizle"
-round(HideBtn)
-
-HideBtn.MouseButton1Click:Connect(function()
-	Main.Visible=false
-end)
-
-local ExitBtn = Instance.new("TextButton",Main)
-ExitBtn.Size=UDim2.new(0.9,0,0,35)
-ExitBtn.Position=UDim2.new(0.05,0,0.92,0)
-ExitBtn.Text="Çıkış"
-round(ExitBtn)
-
-ExitBtn.MouseButton1Click:Connect(function()
-	ScreenGui:Destroy()
+RunService.RenderStepped:Connect(function()
+	local c = Color3.fromHSV(tick()%5/5, 1, 1)
+	for p, highlight in pairs(individualESP) do if highlight and highlight.Parent then highlight.FillColor = c else individualESP[p] = nil end end
 end)
