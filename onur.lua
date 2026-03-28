@@ -140,7 +140,7 @@ end)
 ------------------------------------------------
 local Header = Instance.new("TextLabel", Main)
 Header.Size = UDim2.new(1, 0, 0, 45)
-Header.Text = "  VayOnur Hub | By Onur_dev"
+Header.Text = "  VayOnur Hub | By @zhbsbzvv"
 Header.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
 Header.TextColor3 = Color3.new(1, 1, 1)
 Header.TextXAlignment = Enum.TextXAlignment.Left
