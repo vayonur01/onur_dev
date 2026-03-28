@@ -41,7 +41,7 @@ LoginStroke.Color = Color3.fromRGB(80, 80, 80)
 
 local LoginHeader = Instance.new("TextLabel", LoginFrame)
 LoginHeader.Size = UDim2.new(1, 0, 0, 45)
-LoginHeader.Text = "Premium Hub Login"
+LoginHeader.Text = "VayOnur Hub Login"
 LoginHeader.TextColor3 = Color3.new(1, 1, 1)
 LoginHeader.Font = selectedFont
 LoginHeader.TextSize = 20
@@ -140,7 +140,7 @@ end)
 ------------------------------------------------
 local Header = Instance.new("TextLabel", Main)
 Header.Size = UDim2.new(1, 0, 0, 45)
-Header.Text = "  Premium Hub | emreonrwp"
+Header.Text = "  VayOnur Hub | By Onur_dev"
 Header.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
 Header.TextColor3 = Color3.new(1, 1, 1)
 Header.TextXAlignment = Enum.TextXAlignment.Left
